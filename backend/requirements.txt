@@ -1,6 +1,15 @@
 fastapi
 uvicorn
-python-multipart
 sqlalchemy
 pydantic
 python-dotenv
+gunicorn
+alembic
+psycopg2-binary
+python-multipart
+openai
+redis
+passlib[bcrypt]
+python-jose
+bcrypt
+pydantic-settings
