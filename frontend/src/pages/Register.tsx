@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import BASE_URL from '../api'
 
@@ -11,9 +11,17 @@ export default function Register() {
 
   const handleRegister = async () => {
     try {
-      await axios.post(`${BASE_URL}/auth/register`, { email, password })
+      await axios.post(`${BASE_URL}/auth/register`, {
+        email,
+        password
+      })
+
       setMessage('Registration successful! Please login.')
-      setTimeout(() => navigate('/login'), 1500)
+
+      setTimeout(() => {
+        navigate('/login')
+      }, 1500)
+
     } catch (err: any) {
       setMessage(err.response?.data?.detail || 'Registration failed')
     }
@@ -23,7 +31,12 @@ export default function Register() {
     <div style={{ maxWidth: 400, margin: '100px auto', padding: 24 }}>
       <h2>Register</h2>
 
-      {message && <p style={{ color: 'green' }}>{message}</p>}
+      {/* ✅ FIXED MESSAGE COLOR */}
+      {message && (
+        <p style={{ color: message.includes('successful') ? 'green' : 'red' }}>
+          {message}
+        </p>
+      )}
 
       <input
         type="email"
@@ -56,8 +69,9 @@ export default function Register() {
         Register
       </button>
 
+      {/* ✅ FIXED LINK (NO PAGE RELOAD) */}
       <p style={{ marginTop: 12, textAlign: 'center' }}>
-        Already have an account? <a href="/login">Login</a>
+        Already have an account? <Link to="/login">Login</Link>
       </p>
     </div>
   )
