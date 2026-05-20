@@ -1,5 +1,6 @@
+import BASE_URL from "../api";
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 
 export default function Login() {
@@ -10,7 +11,7 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post('http://localhost:8000/auth/login', { email, password })
+      const res = await axios.post(`${BASE_URL}/auth/login`, { email, password })
       localStorage.setItem('token', res.data.token)
       navigate('/dashboard')
     } catch (err) {
@@ -39,7 +40,7 @@ export default function Login() {
         Login
       </button>
       <p style={{ marginTop: 12, textAlign: 'center' }}>
-        No account? <a href="/register">Register</a>
+        No account? <Link to="/register">Register</Link>
       </p>
     </div>
   )
