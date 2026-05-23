@@ -9,7 +9,7 @@ app = FastAPI(title="Resume Analyzer API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000"
+        "http://localhost:3000",
         "https://resume-matcher-mauve.vercel.app",
         ],
     allow_credentials=True,
@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(resume.router, prefix="/api/resume", tags=["resume"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
 
