@@ -1,7 +1,6 @@
-import BASE_URL from "../api";
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
+import client from '../api/client'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -11,9 +10,9 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post(`${BASE_URL}/auth/login`, { email, password })
-      localStorage.setItem('token', res.data.token)
-      navigate('/dashboard')
+      const res = await client.post('/api/auth/login', { email, password })
+      localStorage.setItem('token', res.data.access_token)  // ← fix: access_token not token
+      navigate('/upload')  // ← fix: go to upload page not dashboard
     } catch (err) {
       setError('Invalid email or password')
     }
