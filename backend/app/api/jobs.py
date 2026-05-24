@@ -165,5 +165,10 @@ def match_jobs(
             "ai_analysis": analysis
         })
 
+    # FIXED
     results.sort(key=lambda x: x["score"], reverse=True)
-    return {"matches": results, "total": len(results)}
+    # Only show jobs with score > 0
+    filtered = [r for r in results if r["score"] > 0]
+    # If less than 3, show all
+    final = filtered if len(filtered) >= 3 else results
+    return {"matches": final[:15], "total": len(final)}
