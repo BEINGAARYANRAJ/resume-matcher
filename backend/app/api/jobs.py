@@ -10,29 +10,51 @@ router = APIRouter()
 client_ai = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def fetch_jobs(query: str) -> list:
+    skill = query.replace(" developer", "").strip()
+    all_jobs = []
+
+    # Source 1 — Remotive
     try:
-        headers = {
-            "X-RapidAPI-Key": os.getenv("JSEARCH_API_KEY"),
-            "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
-        }
-        params = {"query": query, "num_pages": "1", "date_posted": "month"}
-        response = httpx.get(
-            "https://jsearch.p.rapidapi.com/search",
-            headers=headers, params=params, timeout=10
+        r1 = httpx.get(
+            "https://remotive.com/api/remote-jobs",
+            params={"search": skill, "limit": 10},
+            timeout=10
         )
-        jobs = response.json().get("data", [])
-        return [{
-            "title": j.get("job_title", ""),
-            "company": j.get("employer_name", ""),
-            "location": j.get("job_city") or "Remote",
-            "description": j.get("job_description", "")[:1000],
-            "source_url": j.get("job_apply_link", ""),
-            "salary_min": j.get("job_min_salary"),
-            "salary_max": j.get("job_max_salary"),
-        } for j in jobs[:10]]
+        for j in r1.json().get("jobs", []):
+            all_jobs.append({
+                "title": j.get("title", ""),
+                "company": j.get("company_name", ""),
+                "location": j.get("candidate_required_location") or "Remote",
+                "description": j.get("description", "")[:1000],
+                "source_url": j.get("url", ""),
+                "salary_min": None,
+                "salary_max": None,
+            })
     except Exception as e:
-        print(f"Job fetch failed: {e}")
-        return []
+        print(f"Remotive failed: {e}")
+
+    # Source 2 — Arbeitnow
+    try:
+        r2 = httpx.get(
+            "https://www.arbeitnow.com/api/job-board-api",
+            params={"search": skill},
+            timeout=10
+        )
+        for j in r2.json().get("data", [])[:20]:
+            all_jobs.append({
+                "title": j.get("title", ""),
+                "company": j.get("company_name", ""),
+                "location": j.get("location") or "Remote",
+                "description": j.get("description", "")[:1000],
+                "source_url": j.get("url", ""),
+                "salary_min": None,
+                "salary_max": None,
+            })
+    except Exception as e:
+        print(f"Arbeitnow failed: {e}")
+
+    print(f"Total jobs fetched: {len(all_jobs)}")
+    return all_jobs
 
 def extract_job_skills(description: str) -> list:
     try:
@@ -80,7 +102,6 @@ def ai_suggestions(job_title: str, missing: list, score: float) -> dict:
         prompt = f"""You are a career coach. A candidate is applying for: {job_title}
 Missing skills: {missing[:5]}
 Match score: {score}%
-
 Return ONLY valid JSON with no markdown, no backticks:
 {{"verdict": "Strong Match", "suggestions": ["tip1", "tip2", "tip3"], "quick_win": "fastest improvement action"}}"""
         response = client_ai.chat.completions.create(
