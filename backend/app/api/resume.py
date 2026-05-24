@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.resume import Resume
-import os, json, openai
+import os, json
+from groq import Groq
 from pdfminer.high_level import extract_text as extract_pdf
 import docx as python_docx
 
 router = APIRouter()
-client_ai = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client_ai = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def extract_text(file_path: str, ext: str) -> str:
     if ext == ".pdf":
@@ -26,14 +27,12 @@ def parse_with_gpt(raw_text: str) -> dict:
   "education": [{{"degree": "B.Tech", "institution": "University", "year": "2020"}}],
   "summary": "Professional summary in 2 sentences"
 }}
-
 Resume:
 {raw_text[:4000]}"""
 
     response = client_ai.chat.completions.create(
-        model="gpt-4o-mini",
+        model="llama3-8b-8192",
         messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
         temperature=0.1
     )
     return json.loads(response.choices[0].message.content)
@@ -44,7 +43,6 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user_id: int = Depends(get_current_user)
 ):
-    # Save file
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in [".pdf", ".docx"]:
         raise HTTPException(400, detail="Only PDF and DOCX allowed")
@@ -54,16 +52,14 @@ async def upload_resume(
     with open(save_path, "wb") as f:
         f.write(await file.read())
 
-    # Extract text
     raw_text = extract_text(save_path, ext)
 
-    # Parse with GPT
     try:
         parsed = parse_with_gpt(raw_text)
-    except Exception:
+    except Exception as e:
+        print(f"GPT parsing failed: {e}")
         parsed = {"skills": [], "experience": [], "education": [], "summary": ""}
 
-    # Save to DB
     resume = Resume(
         user_id=user_id,
         filename=file.filename,

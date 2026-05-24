@@ -16,3 +16,4 @@ pydantic-settings
 pdfminer.six
 python-docx
 httpx
+groq

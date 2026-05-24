@@ -3,10 +3,11 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.resume import Resume
-import os, json, httpx, openai
+import os, json, httpx
+from groq import Groq
 
 router = APIRouter()
-client_ai = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client_ai = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def fetch_jobs(query: str) -> list:
     try:
@@ -38,9 +39,10 @@ def extract_job_skills(description: str) -> list:
 Return ONLY the array like: ["Python", "React", "AWS"]
 Description: {description[:1500]}"""
         response = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="llama3-8b-8192",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.1, max_tokens=200
+            temperature=0.1,
+            max_tokens=200
         )
         text = response.choices[0].message.content.strip()
         return json.loads(text)
@@ -71,14 +73,15 @@ Missing skills: {missing[:5]}
 Match score: {score}%
 Return JSON: {{"verdict": "Strong/Good/Fair/Weak Match", "suggestions": ["tip1","tip2","tip3"], "quick_win": "fastest improvement"}}"""
         response = client_ai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="llama3-8b-8192",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3, max_tokens=300
+            temperature=0.3,
+            max_tokens=300
         )
-        return json.loads(response.choices[0].message.content)
+        text = response.choices[0].message.content.strip()
+        return json.loads(text)
     except Exception:
-        return {"verdict": "Good Match", "suggestions": [f"Learn {s}" for s in missing[:3]], "quick_win": f"Start with {missing[0]}"}
+        return {"verdict": "Good Match", "suggestions": [f"Learn {s}" for s in missing[:3]], "quick_win": f"Start with {missing[0] if missing else 'key skills'}"}
 
 @router.get("/match/{resume_id}")
 def match_jobs(
@@ -91,14 +94,10 @@ def match_jobs(
         raise HTTPException(404, detail="Resume not found")
 
     skills = resume.parsed_skills or []
-
-    # Build search query from skills
     query = " ".join(skills[:3]) + " developer" if skills else "software developer"
 
-    # Fetch real jobs
     jobs = fetch_jobs(query)
 
-    # Fallback jobs if API fails
     if not jobs:
         jobs = [
             {"title": "Software Engineer", "company": "Google", "location": "Remote",
@@ -115,7 +114,6 @@ def match_jobs(
         score = calculate_score(skills, job_skills)
         gaps = get_gaps(skills, job_skills)
         analysis = ai_suggestions(job["title"], gaps["missing"], score)
-
         results.append({
             "job": job,
             "score": score,
@@ -124,7 +122,5 @@ def match_jobs(
             "ai_analysis": analysis
         })
 
-    # Sort by score
     results.sort(key=lambda x: x["score"], reverse=True)
-
     return {"matches": results, "total": len(results)}
