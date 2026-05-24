@@ -13,3 +13,6 @@ passlib[bcrypt]
 python-jose
 bcrypt==4.0.1
 pydantic-settings
+pdfminer.six
+python-docx
+httpx
