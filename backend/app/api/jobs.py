@@ -30,14 +30,18 @@ def fetch_jobs(query: str) -> list:
             "salary_min": j.get("job_min_salary"),
             "salary_max": j.get("job_max_salary"),
         } for j in jobs[:10]]
-    except Exception:
+    except Exception as e:
+        print(f"Job fetch failed: {e}")
         return []
 
 def extract_job_skills(description: str) -> list:
     try:
-        prompt = f"""Extract required skills from this job description as a JSON array.
-Return ONLY the array like: ["Python", "React", "AWS"]
-Description: {description[:1500]}"""
+        prompt = f"""Extract required technical skills from this job description.
+Return ONLY a JSON array with no markdown, no backticks, no extra text.
+Example: ["Python", "React", "AWS", "Docker"]
+
+Job description:
+{description[:1500]}"""
         response = client_ai.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
@@ -45,8 +49,13 @@ Description: {description[:1500]}"""
             max_tokens=200
         )
         text = response.choices[0].message.content.strip()
-        return json.loads(text)
-    except Exception:
+        start = text.find('[')
+        end = text.rfind(']') + 1
+        if start == -1 or end == 0:
+            return []
+        return json.loads(text[start:end])
+    except Exception as e:
+        print(f"Skill extraction failed: {e}")
         return []
 
 def calculate_score(resume_skills: list, job_skills: list) -> float:
@@ -68,20 +77,31 @@ def ai_suggestions(job_title: str, missing: list, score: float) -> dict:
     if not missing:
         return {"verdict": "Strong Match", "suggestions": [], "quick_win": "Apply now!"}
     try:
-        prompt = f"""Career coach advice for {job_title} role.
+        prompt = f"""You are a career coach. A candidate is applying for: {job_title}
 Missing skills: {missing[:5]}
 Match score: {score}%
-Return JSON: {{"verdict": "Strong/Good/Fair/Weak Match", "suggestions": ["tip1","tip2","tip3"], "quick_win": "fastest improvement"}}"""
+
+Return ONLY valid JSON with no markdown, no backticks:
+{{"verdict": "Strong Match", "suggestions": ["tip1", "tip2", "tip3"], "quick_win": "fastest improvement action"}}"""
         response = client_ai.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=300
         )
         text = response.choices[0].message.content.strip()
-        return json.loads(text)
-    except Exception:
-        return {"verdict": "Good Match", "suggestions": [f"Learn {s}" for s in missing[:3]], "quick_win": f"Start with {missing[0] if missing else 'key skills'}"}
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start == -1 or end == 0:
+            raise ValueError("No JSON in response")
+        return json.loads(text[start:end])
+    except Exception as e:
+        print(f"AI suggestions failed: {e}")
+        return {
+            "verdict": "Good Match",
+            "suggestions": [f"Learn {s}" for s in missing[:3]],
+            "quick_win": f"Start with {missing[0] if missing else 'key skills'}"
+        }
 
 @router.get("/match/{resume_id}")
 def match_jobs(
@@ -94,23 +114,25 @@ def match_jobs(
         raise HTTPException(404, detail="Resume not found")
 
     skills = resume.parsed_skills or []
-    query = " ".join(skills[:3]) + " developer" if skills else "software developer"
+    print(f"Resume skills: {skills}")
 
+    query = " ".join(skills[:3]) + " developer" if skills else "software developer"
     jobs = fetch_jobs(query)
 
     if not jobs:
         jobs = [
             {"title": "Software Engineer", "company": "Google", "location": "Remote",
-             "description": "Python React SQL AWS experience needed", "source_url": "https://careers.google.com"},
+             "description": "Python React SQL AWS Docker experience needed", "source_url": "https://careers.google.com"},
             {"title": "Full Stack Developer", "company": "Microsoft", "location": "Hyderabad",
-             "description": "JavaScript React Node.js TypeScript", "source_url": "https://careers.microsoft.com"},
+             "description": "JavaScript React Node.js TypeScript REST APIs", "source_url": "https://careers.microsoft.com"},
             {"title": "Backend Engineer", "company": "Amazon", "location": "Remote",
-             "description": "Python FastAPI Docker Kubernetes AWS", "source_url": "https://amazon.jobs"},
+             "description": "Python FastAPI Docker Kubernetes AWS microservices", "source_url": "https://amazon.jobs"},
         ]
 
     results = []
     for job in jobs:
         job_skills = extract_job_skills(job["description"])
+        print(f"Job: {job['title']} | Skills: {job_skills}")
         score = calculate_score(skills, job_skills)
         gaps = get_gaps(skills, job_skills)
         analysis = ai_suggestions(job["title"], gaps["missing"], score)

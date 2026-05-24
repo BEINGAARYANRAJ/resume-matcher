@@ -20,22 +20,25 @@ def extract_text(file_path: str, ext: str) -> str:
     return ""
 
 def parse_with_gpt(raw_text: str) -> dict:
-    prompt = f"""Extract information from this resume and return ONLY valid JSON:
-{{
-  "skills": ["skill1", "skill2"],
-  "experience": [{{"title": "Job Title", "company": "Company", "duration": "2020-2022"}}],
-  "education": [{{"degree": "B.Tech", "institution": "University", "year": "2020"}}],
-  "summary": "Professional summary in 2 sentences"
-}}
-Resume:
+    prompt = f"""Extract information from this resume. Return ONLY valid JSON with no markdown, no backticks, no extra text before or after.
+Format exactly like this:
+{{"skills": ["Python", "React"], "experience": [{{"title": "Engineer", "company": "Google", "duration": "2021-2023"}}], "education": [{{"degree": "B.Tech", "institution": "IIT", "year": "2021"}}], "summary": "Experienced developer with 2 years experience."}}
+
+Resume text:
 {raw_text[:4000]}"""
 
     response = client_ai.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.1
+        temperature=0.1,
+        max_tokens=1000
     )
-    return json.loads(response.choices[0].message.content)
+    text = response.choices[0].message.content.strip()
+    start = text.find('{')
+    end = text.rfind('}') + 1
+    if start == -1 or end == 0:
+        raise ValueError("No JSON found in response")
+    return json.loads(text[start:end])
 
 @router.post("/upload")
 async def upload_resume(
@@ -53,9 +56,11 @@ async def upload_resume(
         f.write(await file.read())
 
     raw_text = extract_text(save_path, ext)
+    print(f"Extracted text length: {len(raw_text)}")
 
     try:
         parsed = parse_with_gpt(raw_text)
+        print(f"Parsed skills: {parsed.get('skills', [])}")
     except Exception as e:
         print(f"GPT parsing failed: {e}")
         parsed = {"skills": [], "experience": [], "education": [], "summary": ""}
